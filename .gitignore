@@ -50,3 +50,8 @@ results/
 # Project-internal docs (not for the public repo)
 project.md
 CONTEXT.md
+
+# Scratch scripts
+run_test.py
+runtest.py
+
