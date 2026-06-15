@@ -55,3 +55,6 @@ CONTEXT.md
 run_test.py
 runtest.py
 
+# PlantUML diagrams
+*.puml
+
