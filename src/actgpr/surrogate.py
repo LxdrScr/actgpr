@@ -102,6 +102,7 @@ class GPyTorchSurrogate:
         self.train_y = train_y
 
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        self.likelihood.noise = 1e-4
         self.model = ExactGPModel(self.train_x, self.train_y, self.likelihood)
 
         self.model.train()
@@ -115,7 +116,7 @@ class GPyTorchSurrogate:
             output = self.model(self.train_x)
             loss = -mll(output, self.train_y)
             loss.backward()
-            optimizer.step() #ToDo we could log the loss, mean etc.
+            optimizer.step()  # ToDo we could log the loss, mean etc.
 
     def predict(
         self,
@@ -223,6 +224,5 @@ class GPyTorchSurrogate:
             ax.plot(test_x.numpy(), f_mean.numpy(), "b")
             # Shade between the lower and upper confidence bounds
             ax.fill_between(test_x.numpy(), lower.numpy(), upper.numpy(), alpha=0.5)
-            ax.set_ylim([-3, 3])
             ax.legend(["Observed Data", "Mean", "Confidence"])
             plt.show()
