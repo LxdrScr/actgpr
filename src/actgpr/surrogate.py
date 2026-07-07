@@ -286,4 +286,3 @@ class GPyTorchSurrogate:
 
             if show:
                 plt.show()
-
