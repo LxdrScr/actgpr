@@ -65,28 +65,19 @@ class GPyTorchSurrogate:
         self.train_x: torch.Tensor | None = None
         self.train_y: torch.Tensor | None = None
 
-    def fit(
+    def _setup_model(
         self,
         train_x: torch.Tensor,
         train_y: torch.Tensor,
-        training_iter: int = 50,
-        lr: float = 0.1,
     ) -> None:
-        """Fit the GP model to the given training data.
-
-        Optimizes the hyperparameters (kernel lengthscale, outputscale, and noise variance)
-        using PyTorch's Adam optimizer.
+        """Set up the GP model and likelihood with training data.
 
         Parameters
         ----------
         train_x : torch.Tensor of shape (n,)
-            The input points where the objective function was evaluated.
+            The input points where the objective was evaluated.
         train_y : torch.Tensor of shape (n,)
             The corresponding evaluations of the objective.
-        training_iter : int, optional
-            Number of iterations for hyperparameter optimization, by default 50.
-        lr : float, optional
-            Learning rate for the optimizer, by default 0.1.
 
         Raises
         ------
@@ -102,9 +93,34 @@ class GPyTorchSurrogate:
         self.train_y = train_y
 
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        self.likelihood.noise = 1e-4
         self.model = ExactGPModel(self.train_x, self.train_y, self.likelihood)
 
+    def fit_and_train(
+        self,
+        train_x: torch.Tensor,
+        train_y: torch.Tensor,
+        training_iter: int = 50,
+        lr: float = 0.1,
+    ) -> None:
+        """Fit the GP model and optimise hyperparameters automatically.
+
+        Optimises the kernel lengthscale, outputscale, and noise variance
+        using PyTorch's Adam optimiser.
+
+        Parameters
+        ----------
+        train_x : torch.Tensor of shape (n,)
+            The input points where the objective was evaluated.
+        train_y : torch.Tensor of shape (n,)
+            The corresponding evaluations of the objective.
+        training_iter : int, optional
+            Number of iterations for hyperparameter optimisation, by default 50.
+        lr : float, optional
+            Learning rate for the optimiser, by default 0.1.
+        """
+        self._setup_model(train_x, train_y)
+
+        self.likelihood.noise = 1e-4
         self.model.train()
         self.likelihood.train()
 
@@ -116,7 +132,46 @@ class GPyTorchSurrogate:
             output = self.model(self.train_x)
             loss = -mll(output, self.train_y)
             loss.backward()
-            optimizer.step()  # ToDo we could log the loss, mean etc.
+            optimizer.step()
+
+    def fit_no_training(
+        self,
+        train_x: torch.Tensor,
+        train_y: torch.Tensor,
+        lengthscale: float = 1.0,
+        outputscale: float = 1.0,
+        noise: float = 1e-4,
+    ) -> None:
+        """Fit the GP model with user-specified hyperparameters (no training).
+
+        Sets the kernel lengthscale, outputscale, and noise to the given values
+        and freezes all parameters so no optimisation takes place.
+
+        Parameters
+        ----------
+        train_x : torch.Tensor of shape (n,)
+            The input points where the objective was evaluated.
+        train_y : torch.Tensor of shape (n,)
+            The corresponding evaluations of the objective.
+        lengthscale : float, optional
+            The RBF kernel lengthscale, by default 1.0.
+        outputscale : float, optional
+            The kernel outputscale (signal variance), by default 1.0.
+        noise : float, optional
+            The observation noise variance, by default 1e-4.
+        """
+        self._setup_model(train_x, train_y)
+
+        # Set hyperparameters to user-specified values
+        self.model.covar_module.base_kernel.lengthscale = lengthscale
+        self.model.covar_module.outputscale = outputscale
+        self.likelihood.noise = noise
+
+        # Freeze all parameters — no training
+        for param in self.model.parameters():
+            param.requires_grad = False
+        for param in self.likelihood.parameters():
+            param.requires_grad = False
 
     def predict(
         self,
@@ -149,7 +204,7 @@ class GPyTorchSurrogate:
         Raises
         ------
         RuntimeError
-            If fit() has not been called prior to predicting.
+            If fit_and_train() or fit_no_training() has not been called prior to predicting.
         """
         if self.model is None or self.likelihood is None:
             raise RuntimeError("The model must be fitted before predicting.")
