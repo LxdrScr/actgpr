@@ -1,6 +1,5 @@
 """Unit tests for the Acquisition class."""
 
-
 import pytest
 import torch
 
@@ -67,11 +66,13 @@ class TestExpectedImprovement:
 
         assert ei.shape == (3,)
 
-    def test_ei_is_non_negative(self, acquisition: Acquisition) -> None:
+    @pytest.mark.parametrize("current_best", [0.0, 1.0, 5.0, 10.0])
+    def test_ei_is_non_negative(
+        self, acquisition: Acquisition, current_best: float
+    ) -> None:
         """Test scientific invariant: EI scores must be non-negative."""
         f_mean = torch.tensor([0.0, 1.0, 2.0, 5.0])
         f_var = torch.tensor([1.0, 0.5, 2.0, 0.1])
-        current_best = 1.0
 
         ei = acquisition.expected_improvement(f_mean, f_var, current_best)
 
@@ -108,6 +109,14 @@ class TestExpectedImprovement:
         ei = acquisition.expected_improvement(f_mean, f_var, current_best)
 
         assert ei.item() == 0.0
+
+    def test_ei_raises_on_shape_mismatch(self, acquisition: Acquisition) -> None:
+        """Test that EI raises ValueError when f_mean and f_var have different shapes."""
+        f_mean = torch.tensor([1.0, 2.0, 3.0])
+        f_var = torch.tensor([0.5, 0.5])
+
+        with pytest.raises(ValueError, match="Shape mismatch"):
+            acquisition.expected_improvement(f_mean, f_var, current_best=1.0)
 
 
 class TestFindNextInputPoint:
