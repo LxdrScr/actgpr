@@ -2,7 +2,6 @@
 
 import torch
 import gpytorch
-import matplotlib.pyplot as plt
 
 
 class ExactGPModel(gpytorch.models.ExactGP):
@@ -238,51 +237,3 @@ class GPyTorchSurrogate:
             "f_covar": f_covar,
             "f_samples": f_samples,
         }
-
-    def plot(self, test_x: torch.Tensor, show: bool = True) -> None:
-        """Plot the fitted model predictions against the training evaluations.
-
-        Parameters
-        ----------
-        test_x : torch.Tensor of shape (m,)
-            The test input points used to compute predictions for plotting.
-        show : bool, optional
-            Whether to call plt.show() immediately, by default True.
-            Set to False when plotting multiple surrogates before displaying.
-
-        Raises
-        ------
-        RuntimeError
-            If the model has not been fitted or has no training data.
-        """
-        if (
-            self.model is None
-            or self.likelihood is None
-            or self.train_x is None
-            or self.train_y is None
-        ):
-            raise RuntimeError("The model must be fitted before plotting.")
-
-        preds = self.predict(test_x)
-        observed_pred = preds["observed_pred"]
-        f_mean = preds["f_mean"]
-
-        # Assert correct type for confidence bounds computation
-        assert isinstance(observed_pred, gpytorch.distributions.MultivariateNormal)
-
-        with torch.no_grad():
-            f, ax = plt.subplots(1, 1, figsize=(4, 3))
-
-            # Get upper and lower confidence bounds (95% CI)
-            lower, upper = observed_pred.confidence_region()
-
-            # Plot training data as black stars
-            ax.plot(self.train_x.numpy(), self.train_y.numpy(), "k*")
-            # Plot predictive means as blue line
-            ax.plot(test_x.numpy(), f_mean.numpy(), "b")
-            # Shade between the lower and upper confidence bounds
-            ax.fill_between(test_x.numpy(), lower.numpy(), upper.numpy(), alpha=0.5)
-            ax.legend(["Observed Data", "Mean", "Confidence"])
-
-            if show:
-                plt.show()
