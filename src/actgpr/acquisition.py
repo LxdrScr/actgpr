@@ -1,4 +1,15 @@
-"""Acquisition function module for active GPR optimisation."""
+"""Acquisition function module for active GPR optimisation.
+
+Implements the Expected Improvement (EI) acquisition function
+for selecting the next input point to evaluate.
+
+References
+----------
+Jones, D. R., Schonlau, M., & Welch, W. J. (1998).
+    Efficient Global Optimization of Expensive Black-Box Functions.
+    Journal of Global Optimization, 13(4), 455-492.
+    https://doi.org/10.1023/A:1008306431147
+"""
 
 import torch
 from torch.distributions import Normal
@@ -81,16 +92,40 @@ class Acquisition:
                 f"f_var shape {f_var.shape}"
             )
 
+        # Convert variance to standard deviation: σ = √(σ²)
+        # The EI formula (Jones et al. 1998) uses σ, not σ²
         f_std = torch.sqrt(f_var)
 
-        # Where std is zero, improvement is zero (no uncertainty)
-        ei = torch.zeros_like(f_mean)
+        # Initialise EI scores to zero for all candidates.
+        # Points where f_std == 0 (training points, full certainty) stay at
+        # EI = 0 because there is no uncertainty and thus no expected gain.
+        ei = torch.zeros_like(f_std)
+
+        # Boolean mask: only compute EI where f_std > 0 to avoid division by zero
         mask = f_std > 0
 
+        # How much better each candidate's predicted mean is compared to current_best.
+        # Positive improvement means the model predicts this candidate is better.
         improvement = current_best - f_mean[mask]
-        z = improvement / f_std[mask]
 
+        # Standard normal distribution N(0,1) for computing Φ (CDF) and φ (PDF)
         normal = Normal(0, 1)
+
+        # Closed-form EI formula (Jones et al. 1998):
+        #   EI(x) = (f_best − μ(x)) · Φ(z) + σ(x) · φ(z)
+        #
+        # where z = (f_best − μ(x)) / σ(x)  (= improvement / f_std)
+        #
+        # Term 1: improvement * Φ(z)  →  exploitation
+        #   Rewards points where the model confidently predicts a better value.
+        #   Φ(z) is the probability that the true value is below current_best.
+        #
+        # Term 2: σ(x) * φ(z)  →  exploration
+        #   Rewards points where the model is uncertain (large f_std).
+        #   φ(z) is the bell curve height — computed as exp(log_prob(z)) because
+        #   PyTorch's Normal distribution has no .pdf() method, only .log_prob().
+        #   exp(log(φ(z))) = φ(z) = (1/√(2π)) · e^(−z²/2)
+        z = improvement / f_std[mask]
         ei[mask] = improvement * normal.cdf(z) + f_std[mask] * torch.exp(
             normal.log_prob(z)
         )
