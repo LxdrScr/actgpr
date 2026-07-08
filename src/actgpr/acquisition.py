@@ -41,6 +41,13 @@ class Acquisition:
         self.search_bounds = search_bounds
         self.n_candidates = n_candidates
 
+        # Populated by find_next_input_point for downstream use (e.g. plotting)
+        self.candidates: torch.Tensor | None = None
+        self.f_mean: torch.Tensor | None = None
+        self.f_var: torch.Tensor | None = None
+        self.f_covar: torch.Tensor | None = None
+        self.ei_scores: torch.Tensor | None = None
+
     def expected_improvement(
         self,
         f_mean: torch.Tensor,
@@ -116,19 +123,22 @@ class Acquisition:
             If the surrogate has not been fitted prior to calling.
         """
         lo, hi = self.search_bounds
-        candidates = torch.linspace(lo, hi, self.n_candidates)
+        self.candidates = torch.linspace(lo, hi, self.n_candidates)
 
-        preds = self.surrogate.predict(candidates)
-        f_mean = preds["f_mean"]
-        f_var = preds["f_var"]
+        preds = self.surrogate.predict(self.candidates)
+        self.f_mean = preds["f_mean"]
+        self.f_var = preds["f_var"]
+        self.f_covar = preds["f_covar"]
 
-        assert isinstance(f_mean, torch.Tensor)
-        assert isinstance(f_var, torch.Tensor)
+        assert isinstance(self.f_mean, torch.Tensor)
+        assert isinstance(self.f_var, torch.Tensor)
 
-        ei_scores = self.expected_improvement(f_mean, f_var, current_best)
+        self.ei_scores = self.expected_improvement(
+            self.f_mean, self.f_var, current_best
+        )
 
-        best_index = torch.argmax(ei_scores)
-        return candidates[best_index].item()
+        best_index = torch.argmax(self.ei_scores)
+        return self.candidates[best_index].item()
 
     def __repr__(self) -> str:
         """Return a concise human-readable summary of the Acquisition."""
