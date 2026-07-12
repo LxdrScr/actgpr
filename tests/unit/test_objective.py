@@ -44,5 +44,34 @@ def test_objective_output_is_non_negative(objective: Objective, x: float) -> Non
 
 
 def test_objective_repr(objective: Objective) -> None:
-    """Test the string representation of the Objective."""
-    assert repr(objective) == "Objective(function=args^2)"
+    """Test the string representation of the default Objective."""
+    assert repr(objective) == "Objective(function=x^2)"
+
+
+def test_custom_callable_objective() -> None:
+    """Test custom objective initialisation and evaluation."""
+    custom_func = lambda x: (x + 2) ** 2
+    obj = Objective(custom_func)
+
+    assert obj.evaluate(1.0) == (9.0,)
+    assert obj.evaluate(-2.0) == (0.0,)
+    assert repr(obj) == "Objective(function=custom_function)"
+
+
+def test_custom_named_function_repr() -> None:
+    """Test that repr uses function names for normal named functions."""
+    def my_cool_function(x: float) -> float:
+        return x + 5
+
+    obj = Objective(my_cool_function)
+    assert repr(obj) == "Objective(function=my_cool_function)"
+
+
+def test_custom_function_error_propagation() -> None:
+    """Test that errors inside custom functions are caught and raised as TypeError."""
+    def failing_func(x: float) -> float:
+        raise ValueError("Something went wrong inside the function")
+
+    obj = Objective(failing_func)
+    with pytest.raises(TypeError, match="Error evaluating objective function"):
+        obj.evaluate(1.0)
