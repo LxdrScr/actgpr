@@ -121,7 +121,7 @@ class GPyTorchSurrogate:
         """
         self._setup_model(train_x, train_y)
 
-        self.likelihood.noise = 1e-2
+        self.likelihood.noise = 1e-4
         self.model.train()
         self.likelihood.train()
 
