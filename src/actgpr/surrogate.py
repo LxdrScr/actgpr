@@ -131,7 +131,8 @@ class GPyTorchSurrogate:
         for _ in range(training_iter):
             optimizer.zero_grad()
             output = self.model(self.train_x)
-            loss = -mll(output, self.train_y)
+            with gpytorch.settings.cholesky_jitter(1e-4):
+                loss = -mll(output, self.train_y)
             loss.backward()
             optimizer.step()
 
@@ -214,7 +215,7 @@ class GPyTorchSurrogate:
         self.model.eval()
         self.likelihood.eval()
 
-        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+        with torch.no_grad(), gpytorch.settings.fast_pred_var(), gpytorch.settings.cholesky_jitter(1e-4):
             f_preds = self.model(test_x_double)
             observed_pred = self.likelihood(f_preds)
 
