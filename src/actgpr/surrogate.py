@@ -3,6 +3,8 @@
 import torch
 import gpytorch
 
+#TODO a input of the surrogate should be "noise"
+#TODO maybe lengthscale l and outputscale sigma^2 too! for train and non train
 
 class ExactGPModel(gpytorch.models.ExactGP):
     """An exact Gaussian Process model with Constant mean and scaled RBF kernel.
@@ -88,11 +90,11 @@ class GPyTorchSurrogate:
                 f"Shape mismatch: train_x shape {train_x.shape} must match train_y shape {train_y.shape}"
             )
 
-        self.train_x = train_x
-        self.train_y = train_y
+        self.train_x = train_x.double()
+        self.train_y = train_y.double()
 
-        self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        self.model = ExactGPModel(self.train_x, self.train_y, self.likelihood)
+        self.likelihood = gpytorch.likelihoods.GaussianLikelihood().double()
+        self.model = ExactGPModel(self.train_x, self.train_y, self.likelihood).double()
 
     def fit_and_train(
         self,
@@ -119,7 +121,7 @@ class GPyTorchSurrogate:
         """
         self._setup_model(train_x, train_y)
 
-        self.likelihood.noise = 1e-4
+        self.likelihood.noise = 1e-2
         self.model.train()
         self.likelihood.train()
 
@@ -208,11 +210,12 @@ class GPyTorchSurrogate:
         if self.model is None or self.likelihood is None:
             raise RuntimeError("The model must be fitted before predicting.")
 
+        test_x_double = test_x.double()
         self.model.eval()
         self.likelihood.eval()
 
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            f_preds = self.model(test_x)
+            f_preds = self.model(test_x_double)
             observed_pred = self.likelihood(f_preds)
 
             f_mean = f_preds.mean
