@@ -218,3 +218,70 @@ class TestOptimisationRunRun:
         result = run.run()
         # The minimum of (x-1)^2 is at x=1, y=0
         assert result["best_y"] < 1.0
+
+
+class TestOptimisationRunSnapshots:
+    """Tests for snapshot storage and plot_iterations."""
+
+    @pytest.fixture()
+    def snapshot_run(self) -> OptimisationRun:
+        """Return an OptimisationRun with store_snapshots=True."""
+        torch.manual_seed(SEED)
+        return OptimisationRun(
+            objective=ObjectiveFn(),
+            surrogate=GPyTorchSurrogate(),
+            search_bounds=(-3.0, 3.0),
+            initial_train_x=torch.tensor([-2.0, -1.0, 1.0, 2.0]),
+            max_evaluations=8,
+            ei_threshold=0.01,
+            n_candidates=50,
+            training_iter=10,
+            store_snapshots=True,
+        )
+
+    def test_snapshots_stored_when_enabled(self, snapshot_run: OptimisationRun) -> None:
+        """Test that snapshots are present in _results when store_snapshots=True."""
+        snapshot_run.run()
+        snapshot_keys = {
+            "candidates",
+            "f_mean",
+            "f_var",
+            "ei_scores",
+            "train_x",
+            "train_y",
+        }
+        for entry in snapshot_run._results:
+            assert snapshot_keys.issubset(entry.keys())
+
+    def test_snapshots_absent_when_disabled(self, simple_run: OptimisationRun) -> None:
+        """Test that no snapshot tensors are stored when store_snapshots=False."""
+        simple_run.run()
+        for entry in simple_run._results:
+            assert "candidates" not in entry
+
+    def test_snapshot_tensors_have_correct_shapes(
+        self, snapshot_run: OptimisationRun
+    ) -> None:
+        """Test that snapshot tensors have consistent shapes."""
+        snapshot_run.run()
+        for entry in snapshot_run._results:
+            n_candidates = entry["candidates"].numel()
+            assert entry["f_mean"].shape == (n_candidates,)
+            assert entry["f_var"].shape == (n_candidates,)
+            assert entry["ei_scores"].shape == (n_candidates,)
+            assert entry["train_x"].numel() == entry["train_y"].numel()
+
+    def test_snapshot_train_data_grows(self, snapshot_run: OptimisationRun) -> None:
+        """Test that snapshot train_x grows across iterations."""
+        snapshot_run.run()
+        results = snapshot_run._results
+        if len(results) >= 2:
+            assert results[1]["train_x"].numel() > results[0]["train_x"].numel()
+
+    def test_plot_iterations_raises_without_snapshots(
+        self, simple_run: OptimisationRun
+    ) -> None:
+        """Test that plot_iterations raises RuntimeError without snapshots."""
+        simple_run.run()
+        with pytest.raises(RuntimeError, match="No snapshots available"):
+            simple_run.plot_iterations()
