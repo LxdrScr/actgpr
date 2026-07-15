@@ -76,7 +76,7 @@ actgpr/                              ← git repo root
         ├── __init__.py
         ├── run.py                   ← OptimisationRun (owns loop & MRR write actions)
         ├── mrr.py                   ← MRR module (free functions for artifact writes)
-        ├── objective.py             ← Simple objective function (placeholder/empty)
+        ├── objective_fn.py          ← Simple objective function (placeholder/empty)
         ├── surrogate.py             ← Surrogate GP model (placeholder/empty; GPyTorch backend)
         └── acquisition.py           ← Acquisition function (placeholder/empty)
 ```
@@ -178,3 +178,32 @@ Gating is strictly enforced: any failure (e.g. in lint) terminates the pipeline 
 | 3 | Acquisition function | **Open** — architecture and configuration fields TBD |
 | 4 | Dimensionality | **1D first** — scalar input points; nD extension planned |
 | 5 | Minimum citation fields | **Planned for the future** — add `cff-version`, `authors`, `title`, `version`, `date-released`, and `url` to `CITATION.cff` |
+
+---
+
+## 10. Roadmap / TODO
+
+Living checklist of outstanding work. Update as items complete or new ones surface.
+
+### MRR & config
+- [ ] `mrr.py` — free functions for `config.json`/`meta.json`/`manifest.json`/`run.log`/`results.h5` writes (currently only planned in `Architecture.puml`)
+- [ ] `OptimisationRun.from_config()` classmethod to construct a run from `config.json`
+
+### Iteration history (blocks both items below)
+- [ ] Extend `OptimisationRun`'s deferred-write accumulator to optionally (`track_history: bool = False`) snapshot per iteration: `train_x`, `train_y`, `candidates`, `f_mean`, `f_var`, `next_point`, `current_best`, `max_ei`
+- [ ] Persist history to `results.h5` once `mrr.py` exists (self-describing: one group per iteration)
+
+### Plotting — step through iterations
+- [ ] `plotting.py::plot_run_history()` — browse the surrogate/acquisition state per iteration using `matplotlib.widgets.Slider` or keypress stepping (not seaborn — no iteration-stepping primitive there, would duplicate matplotlib)
+
+### Validation — does the surrogate actually converge?
+- [ ] New `validation.py` module (Outputs-style: extraction/QoI/stats, separate from `run.py`'s execution role)
+- [ ] First metric: error of `f_mean` vs. true Objective on the candidate grid, per iteration (only meaningful for an Analytic objective) → plot error vs. iteration
+- [ ] Later: ground-truth-free calibration (e.g. leave-one-out) once an Experiment objective exists
+- [ ] Add `tests/unit/test_validation.py` + a regression baseline once metric is defined
+
+### Definition of Done (formalities)
+- [ ] `CITATION.cff`, `CHANGELOG.md`
+- [ ] `.github/workflows/ci.yml` (lint → test → docs → deploy)
+- [ ] Sphinx docs build
+- [ ] `LICENSE` SPDX identifier check
