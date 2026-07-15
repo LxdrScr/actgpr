@@ -3,9 +3,6 @@
 import torch
 import gpytorch
 
-# TODO a input of the surrogate should be "noise"
-# TODO maybe lengthscale l and outputscale sigma^2 too! for train and non train
-
 
 class ExactGPModel(gpytorch.models.ExactGP):
     """An exact Gaussian Process model with Constant mean and scaled RBF kernel.
@@ -103,6 +100,7 @@ class GPyTorchSurrogate:
         train_y: torch.Tensor,
         training_iter: int = 50,
         lr: float = 0.1,
+        noise: float = 1e-4,
     ) -> None:
         """Fit the GP model and optimise hyperparameters automatically.
 
@@ -119,10 +117,12 @@ class GPyTorchSurrogate:
             Number of iterations for hyperparameter optimisation, by default 50.
         lr : float, optional
             Learning rate for the optimiser, by default 0.1.
+        noise : float, optional
+            Initial observation noise variance for the likelihood, by default 1e-4.
         """
         self._setup_model(train_x, train_y)
 
-        self.likelihood.noise = 1e-4
+        self.likelihood.noise = noise
         self.model.train()
         self.likelihood.train()
 
