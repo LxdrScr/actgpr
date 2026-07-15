@@ -69,7 +69,7 @@ class OptimisationRun:
         ------
         ValueError
             If initial_train_x is empty or max_evaluations is less than the
-            number of initial points. #TODO max_evaluations can be less than number of initial points!
+            number of initial points.
         """
         # Cast to float64 regardless of input dtype (list or tensor, int or
         # float) so later torch.cat calls never truncate fractional points.
@@ -102,7 +102,9 @@ class OptimisationRun:
         # TODO: add MRR artifact writing (config.json, meta.json, run.log, results.h5)
         self._results: list[dict] = []
 
-    def run(self) -> dict:
+    # TODO: max_evaluations validation may need revisiting — should it allow
+    #       fewer evaluations than initial points?
+    def run(self) -> dict[str, object]:
         """Execute the optimisation loop.
 
         Iteratively fits the surrogate, finds the next input point via the
