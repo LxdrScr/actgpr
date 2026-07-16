@@ -4,7 +4,7 @@ from typing import Callable
 
 
 def _default_func(x: float) -> float:
-    """Evaluate the default objective function f(x) = x^2."""
+    """Evaluate the default Objective: x²."""
     return x**2
 
 

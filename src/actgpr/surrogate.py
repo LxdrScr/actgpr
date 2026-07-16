@@ -24,7 +24,7 @@ class ExactGPModel(gpytorch.models.ExactGP):
         train_x : torch.Tensor of shape (n,)
             The training input points.
         train_y : torch.Tensor of shape (n,)
-            The training target evaluations.
+            The training outputs.
         likelihood : gpytorch.likelihoods.GaussianLikelihood
             The GPyTorch likelihood mapping latent outputs to observed targets.
         """
@@ -58,8 +58,8 @@ class ExactGPModel(gpytorch.models.ExactGP):
 class GPyTorchSurrogate:
     """A Gaussian Process surrogate model backend wrapper using GPyTorch.
 
-    This class packages model definition, parameter optimization, posterior prediction,
-    and plotting routines, hiding GPyTorch-specific API details from external callers.
+    This class packages model definition, parameter optimization, and posterior prediction,
+    hiding GPyTorch-specific API details from external callers.
     """
 
     def __init__(self) -> None:
@@ -87,7 +87,7 @@ class GPyTorchSurrogate:
         train_x : torch.Tensor of shape (n,)
             The input points where the objective was evaluated.
         train_y : torch.Tensor of shape (n,)
-            The corresponding evaluations of the objective.
+            The corresponding Objective outputs.
 
         Raises
         ------
