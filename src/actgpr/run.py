@@ -299,10 +299,10 @@ class OptimisationRun:
             - "train_x": torch.Tensor — all evaluated input points.
             - "train_y": torch.Tensor — all objective evaluations.
             - "n_iterations": int — number of loop iterations executed.
-            - "converged": bool — True if EI dropped below ei_threshold,
-              False if max_evaluations was reached.
+            - "stop_reason": str — "ei_threshold" if EI dropped below
+              ei_threshold, "max_evaluations" if budget cap was reached.
         """
-        converged = False
+        stop_reason = "max_evaluations"
         n_iterations = 0
 
         fit_mode = "training" if self._train_hyperparameters else "fixed"
@@ -340,7 +340,7 @@ class OptimisationRun:
                     f"Converged after {n_iterations} iterations "
                     f"(max EI {max_ei:.6f} < ei_threshold {self.ei_threshold})"
                 )
-                converged = True
+                stop_reason = "ei_threshold"
                 break
 
             # 4. Evaluate objective at the next point
@@ -379,7 +379,7 @@ class OptimisationRun:
                 [self.train_y, torch.tensor([new_y], dtype=self.train_y.dtype)]
             )
 
-        if not converged:
+        if stop_reason == "max_evaluations":
             print(
                 f"Stopped after {n_iterations} iterations "
                 f"(reached max_evaluations={self.max_evaluations})"
@@ -392,7 +392,7 @@ class OptimisationRun:
             "train_x": self.train_x,
             "train_y": self.train_y,
             "n_iterations": n_iterations,
-            "converged": converged,
+            "stop_reason": stop_reason,
         }
 
     def plot_iterations(self) -> None:

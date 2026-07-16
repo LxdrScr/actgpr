@@ -122,7 +122,7 @@ class TestOptimisationRunRun:
             "train_x",
             "train_y",
             "n_iterations",
-            "converged",
+            "stop_reason",
         }
         assert set(result.keys()) == expected_keys
 
@@ -147,11 +147,11 @@ class TestOptimisationRunRun:
         assert result["n_iterations"] >= 1
 
     def test_train_data_grows(self, simple_run: OptimisationRun) -> None:
-        """Test that training data grows during the run (unless converged on first iteration)."""
-        initial_count = simple_run.train_x.numel()
+        """Test that training data grows during the run (unless stopped by EI on first iteration)."""
+        initial_count = 4
         result = simple_run.run()
-        # If converged on first iteration, no new points are added
-        if result["converged"] and result["n_iterations"] == 1:
+        # If stopped by EI on first iteration, no new points are added
+        if result["stop_reason"] == "ei_threshold" and result["n_iterations"] == 1:
             assert result["train_x"].numel() == initial_count
         else:
             assert result["train_x"].numel() > initial_count
@@ -175,22 +175,22 @@ class TestOptimisationRunRun:
         )
         result = run.run()
         assert result["train_x"].numel() <= 5
-        assert result["converged"] is False
+        assert result["stop_reason"] == "max_evaluations"
 
-    def test_converged_flag_true_on_ei_convergence(self) -> None:
-        """Test that converged=True when EI drops below threshold."""
+    def test_stop_reason_ei_threshold(self) -> None:
+        """Test that stop_reason is 'ei_threshold' when EI drops below threshold."""
         run = OptimisationRun.with_training(
             objective=ObjectiveFn(),
             surrogate=GPyTorchSurrogate(),
             search_bounds=(-3.0, 3.0),
             initial_train_x=torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0]),
             max_evaluations=50,
-            ei_threshold=1.0,  # very high — should converge immediately
+            ei_threshold=1.0,  # very high — should stop immediately
             n_candidates=50,
             training_iter=10,
         )
         result = run.run()
-        assert result["converged"] is True
+        assert result["stop_reason"] == "ei_threshold"
 
     def test_results_accumulator_populated(self, simple_run: OptimisationRun) -> None:
         """Test that _results accumulator is populated after run()."""
@@ -330,7 +330,7 @@ class TestOptimisationRunWithoutTraining:
             "train_x",
             "train_y",
             "n_iterations",
-            "converged",
+            "stop_reason",
         }
         assert set(result.keys()) == expected_keys
 
