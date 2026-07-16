@@ -4,6 +4,8 @@ Orchestrates the active learning loop: fit surrogate, maximise acquisition
 function, evaluate objective, repeat until convergence.
 """
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import torch
 from matplotlib.widgets import Slider
@@ -24,8 +26,16 @@ class OptimisationRun:
     ei_threshold (nothing left to gain) or the total number of evaluations
     reaches max_evaluations (budget cap) — whichever fires first.
 
+    Use the classmethods ``with_training`` and ``without_training`` to
+    construct an OptimisationRun. The raw ``__init__`` is available for
+    advanced use but the classmethods are the preferred entry points.
+
     Public Methods
     --------------
+    with_training()
+        Construct an OptimisationRun that optimises GP hyperparameters each iteration.
+    without_training()
+        Construct an OptimisationRun with fixed GP hyperparameters.
     run()
         Execute the optimisation loop and return the results.
     plot_iterations()
@@ -43,11 +53,18 @@ class OptimisationRun:
         max_evaluations: int,
         ei_threshold: float,
         n_candidates: int = 500,
-        training_iter: int = 50,
         noise: float = 1e-4,
         store_snapshots: bool = False,
+        *,
+        _train_hyperparameters: bool = True,
+        _training_iter: int = 50,
+        _lengthscale: float = 1.0,
+        _outputscale: float = 1.0,
     ) -> None:
         """Initialize the OptimisationRun.
+
+        Prefer using the classmethods ``with_training`` or ``without_training``
+        instead of calling ``__init__`` directly.
 
         Parameters
         ----------
@@ -68,12 +85,8 @@ class OptimisationRun:
             The loop stops when the maximum EI score falls below this value.
         n_candidates : int, optional
             Number of candidate points for the acquisition function, by default 500.
-        training_iter : int, optional
-            Number of hyperparameter optimisation iterations per surrogate fit,
-            by default 50.
         noise : float, optional
-            Initial observation noise variance for the GP likelihood,
-            by default 1e-4.
+            Observation noise variance for the GP likelihood, by default 1e-4.
         store_snapshots : bool, optional
             If True, each iteration stores a snapshot of the GP predictions
             and EI scores for later interactive plotting via plot_iterations(),
@@ -100,11 +113,16 @@ class OptimisationRun:
         self.objective = objective
         self.surrogate = surrogate
         self.search_bounds = search_bounds
-        self.training_iter = training_iter
         self.noise = noise
         self.store_snapshots = store_snapshots
         self.max_evaluations = max_evaluations
         self.ei_threshold = ei_threshold
+
+        # Private fit-mode configuration — set by classmethods
+        self._train_hyperparameters = _train_hyperparameters
+        self._training_iter = _training_iter
+        self._lengthscale = _lengthscale
+        self._outputscale = _outputscale
 
         # Evaluate the objective at initial points to get train_y
         self.train_y = torch.tensor(
@@ -117,6 +135,152 @@ class OptimisationRun:
         # Deferred-write accumulator for per-iteration data
         # TODO: add MRR artifact writing (config.json, meta.json, run.log, results.h5)
         self._results: list[dict] = []
+
+    @classmethod
+    def with_training(
+        cls,
+        objective: ObjectiveFn,
+        surrogate: GPyTorchSurrogate,
+        search_bounds: tuple[float, float],
+        initial_train_x: torch.Tensor | list[float],
+        max_evaluations: int,
+        ei_threshold: float,
+        n_candidates: int = 500,
+        training_iter: int = 50,
+        noise: float = 1e-4,
+        store_snapshots: bool = False,
+    ) -> OptimisationRun:
+        """Construct an OptimisationRun that optimises GP hyperparameters.
+
+        Each iteration fits the surrogate and optimises the kernel
+        lengthscale, outputscale, and noise variance using Adam.
+
+        Parameters
+        ----------
+        objective : ObjectiveFn
+            The objective function to minimise.
+        surrogate : GPyTorchSurrogate
+            The GP surrogate model used to approximate the objective.
+        search_bounds : tuple[float, float]
+            The closed interval (lo, hi) within which input points are considered.
+        initial_train_x : torch.Tensor or list[float] of shape (n,)
+            The initial input points to seed the optimisation loop.
+        max_evaluations : int
+            Maximum total number of objective evaluations (budget cap).
+        ei_threshold : float
+            The loop stops when the maximum EI score falls below this value.
+        n_candidates : int, optional
+            Number of candidate points for the acquisition function, by default 500.
+        training_iter : int, optional
+            Number of hyperparameter optimisation iterations per surrogate fit,
+            by default 50.
+        noise : float, optional
+            Initial observation noise variance for the GP likelihood,
+            by default 1e-4.
+        store_snapshots : bool, optional
+            If True, stores GP snapshots for interactive plotting, by default False.
+
+        Returns
+        -------
+        OptimisationRun
+            A configured OptimisationRun that will train hyperparameters.
+        """
+        return cls(
+            objective=objective,
+            surrogate=surrogate,
+            search_bounds=search_bounds,
+            initial_train_x=initial_train_x,
+            max_evaluations=max_evaluations,
+            ei_threshold=ei_threshold,
+            n_candidates=n_candidates,
+            noise=noise,
+            store_snapshots=store_snapshots,
+            _train_hyperparameters=True,
+            _training_iter=training_iter,
+        )
+
+    @classmethod
+    def without_training(
+        cls,
+        objective: ObjectiveFn,
+        surrogate: GPyTorchSurrogate,
+        search_bounds: tuple[float, float],
+        initial_train_x: torch.Tensor | list[float],
+        max_evaluations: int,
+        ei_threshold: float,
+        n_candidates: int = 500,
+        lengthscale: float = 1.0,
+        outputscale: float = 1.0,
+        noise: float = 1e-4,
+        store_snapshots: bool = False,
+    ) -> OptimisationRun:
+        """Construct an OptimisationRun with fixed GP hyperparameters.
+
+        Each iteration fits the surrogate with the given lengthscale,
+        outputscale, and noise — no hyperparameter optimisation takes place.
+
+        Parameters
+        ----------
+        objective : ObjectiveFn
+            The objective function to minimise.
+        surrogate : GPyTorchSurrogate
+            The GP surrogate model used to approximate the objective.
+        search_bounds : tuple[float, float]
+            The closed interval (lo, hi) within which input points are considered.
+        initial_train_x : torch.Tensor or list[float] of shape (n,)
+            The initial input points to seed the optimisation loop.
+        max_evaluations : int
+            Maximum total number of objective evaluations (budget cap).
+        ei_threshold : float
+            The loop stops when the maximum EI score falls below this value.
+        n_candidates : int, optional
+            Number of candidate points for the acquisition function, by default 500.
+        lengthscale : float, optional
+            The RBF kernel lengthscale, by default 1.0.
+        outputscale : float, optional
+            The kernel outputscale (signal variance), by default 1.0.
+        noise : float, optional
+            The observation noise variance, by default 1e-4.
+        store_snapshots : bool, optional
+            If True, stores GP snapshots for interactive plotting, by default False.
+
+        Returns
+        -------
+        OptimisationRun
+            A configured OptimisationRun with fixed hyperparameters.
+        """
+        return cls(
+            objective=objective,
+            surrogate=surrogate,
+            search_bounds=search_bounds,
+            initial_train_x=initial_train_x,
+            max_evaluations=max_evaluations,
+            ei_threshold=ei_threshold,
+            n_candidates=n_candidates,
+            noise=noise,
+            store_snapshots=store_snapshots,
+            _train_hyperparameters=False,
+            _lengthscale=lengthscale,
+            _outputscale=outputscale,
+        )
+
+    def _fit_surrogate(self) -> None:
+        """Fit the surrogate using the configured fit mode."""
+        if self._train_hyperparameters:
+            self.surrogate.fit_and_train(
+                self.train_x,
+                self.train_y,
+                training_iter=self._training_iter,
+                noise=self.noise,
+            )
+        else:
+            self.surrogate.fit_no_training(
+                self.train_x,
+                self.train_y,
+                lengthscale=self._lengthscale,
+                outputscale=self._outputscale,
+                noise=self.noise,
+            )
 
     # TODO: max_evaluations validation may need revisiting — should it allow
     #       fewer evaluations than initial points?
@@ -141,8 +305,10 @@ class OptimisationRun:
         converged = False
         n_iterations = 0
 
+        fit_mode = "training" if self._train_hyperparameters else "fixed"
         print(
-            f"Starting optimisation: {self.train_x.numel()} initial points, "
+            f"Starting optimisation ({fit_mode}): "
+            f"{self.train_x.numel()} initial points, "
             f"max_evaluations={self.max_evaluations}, "
             f"ei_threshold={self.ei_threshold}"
         )
@@ -154,12 +320,7 @@ class OptimisationRun:
             # 1. Fit surrogate to all current training data
             # TODO: consider get_fantasy_model for faster updates
             #       without hyperparameter re-tuning
-            self.surrogate.fit_and_train(
-                self.train_x,
-                self.train_y,
-                training_iter=self.training_iter,
-                noise=self.noise,
-            )
+            self._fit_surrogate()
 
             # 2. Compute current best and find the next input point
             current_best = self.train_y.min().item()
@@ -282,8 +443,10 @@ class OptimisationRun:
 
     def __repr__(self) -> str:
         """Return a concise human-readable summary of the OptimisationRun."""
+        fit_mode = "training" if self._train_hyperparameters else "fixed"
         return (
             f"OptimisationRun("
+            f"fit={fit_mode}, "
             f"bounds={self.search_bounds}, "
             f"max_eval={self.max_evaluations}, "
             f"ei_thresh={self.ei_threshold}, "
