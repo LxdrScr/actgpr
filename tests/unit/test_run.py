@@ -14,7 +14,7 @@ SEED = 42
 def simple_run() -> OptimisationRun:
     """Return an OptimisationRun configured for a simple x^2 optimisation."""
     torch.manual_seed(SEED)
-    return OptimisationRun(
+    return OptimisationRun.with_training(
         objective=ObjectiveFn(),
         surrogate=GPyTorchSurrogate(),
         search_bounds=(-3.0, 3.0),
@@ -101,10 +101,11 @@ class TestOptimisationRunInit:
         """Test that the deferred-write accumulator is empty before run()."""
         assert simple_run._results == []
 
-    def test_repr(self, simple_run: OptimisationRun) -> None:
-        """Test the string representation of OptimisationRun."""
+    def test_repr_shows_fit_mode(self, simple_run: OptimisationRun) -> None:
+        """Test the string representation includes the fit mode."""
         r = repr(simple_run)
         assert "OptimisationRun" in r
+        assert "fit=training" in r
         assert "bounds=(-3.0, 3.0)" in r
         assert "max_eval=10" in r
 
@@ -162,7 +163,7 @@ class TestOptimisationRunRun:
 
     def test_respects_max_evaluations(self) -> None:
         """Test that the loop stops at max_evaluations even without convergence."""
-        run = OptimisationRun(
+        run = OptimisationRun.with_training(
             objective=ObjectiveFn(),
             surrogate=GPyTorchSurrogate(),
             search_bounds=(-3.0, 3.0),
@@ -178,7 +179,7 @@ class TestOptimisationRunRun:
 
     def test_converged_flag_true_on_ei_convergence(self) -> None:
         """Test that converged=True when EI drops below threshold."""
-        run = OptimisationRun(
+        run = OptimisationRun.with_training(
             objective=ObjectiveFn(),
             surrogate=GPyTorchSurrogate(),
             search_bounds=(-3.0, 3.0),
@@ -205,7 +206,7 @@ class TestOptimisationRunRun:
     def test_custom_objective_converges(self) -> None:
         """Test that the loop works with a custom objective function."""
         torch.manual_seed(SEED)
-        run = OptimisationRun(
+        run = OptimisationRun.with_training(
             objective=ObjectiveFn(lambda x: (x - 1) ** 2),
             surrogate=GPyTorchSurrogate(),
             search_bounds=(-3.0, 5.0),
@@ -227,7 +228,7 @@ class TestOptimisationRunSnapshots:
     def snapshot_run(self) -> OptimisationRun:
         """Return an OptimisationRun with store_snapshots=True."""
         torch.manual_seed(SEED)
-        return OptimisationRun(
+        return OptimisationRun.with_training(
             objective=ObjectiveFn(),
             surrogate=GPyTorchSurrogate(),
             search_bounds=(-3.0, 3.0),
@@ -285,3 +286,77 @@ class TestOptimisationRunSnapshots:
         simple_run.run()
         with pytest.raises(RuntimeError, match="No snapshots available"):
             simple_run.plot_iterations()
+
+
+class TestOptimisationRunWithoutTraining:
+    """Tests for OptimisationRun.without_training() classmethod."""
+
+    @pytest.fixture()
+    def fixed_run(self) -> OptimisationRun:
+        """Return an OptimisationRun with fixed hyperparameters."""
+        torch.manual_seed(SEED)
+        return OptimisationRun.without_training(
+            objective=ObjectiveFn(),
+            surrogate=GPyTorchSurrogate(),
+            search_bounds=(-3.0, 3.0),
+            initial_train_x=torch.tensor([-2.0, -1.0, 1.0, 2.0]),
+            max_evaluations=8,
+            ei_threshold=0.01,
+            n_candidates=50,
+            lengthscale=1.0,
+            outputscale=1.0,
+            noise=1e-4,
+        )
+
+    def test_internal_flag_is_false(self, fixed_run: OptimisationRun) -> None:
+        """Test that the internal train flag is False."""
+        assert fixed_run._train_hyperparameters is False
+
+    def test_stores_fixed_hyperparameters(self, fixed_run: OptimisationRun) -> None:
+        """Test that lengthscale and outputscale are stored."""
+        assert fixed_run._lengthscale == 1.0
+        assert fixed_run._outputscale == 1.0
+
+    def test_repr_shows_fixed_mode(self, fixed_run: OptimisationRun) -> None:
+        """Test that __repr__ shows fit=fixed."""
+        assert "fit=fixed" in repr(fixed_run)
+
+    def test_run_returns_expected_keys(self, fixed_run: OptimisationRun) -> None:
+        """Test that run() returns all expected keys in fixed mode."""
+        result = fixed_run.run()
+        expected_keys = {
+            "best_x",
+            "best_y",
+            "train_x",
+            "train_y",
+            "n_iterations",
+            "converged",
+        }
+        assert set(result.keys()) == expected_keys
+
+    def test_run_produces_results(self, fixed_run: OptimisationRun) -> None:
+        """Test that the fixed-mode loop runs and produces iterations."""
+        result = fixed_run.run()
+        assert result["n_iterations"] > 0
+
+    def test_train_data_grows(self, fixed_run: OptimisationRun) -> None:
+        """Test that training data grows in fixed mode."""
+        initial_n = fixed_run.train_x.numel()
+        fixed_run.run()
+        assert fixed_run.train_x.numel() > initial_n
+
+
+class TestOptimisationRunWithTraining:
+    """Tests for OptimisationRun.with_training() classmethod."""
+
+    def test_internal_flag_is_true(self, simple_run: OptimisationRun) -> None:
+        """Test that the internal train flag is True."""
+        assert simple_run._train_hyperparameters is True
+
+    def test_stores_training_iter(self, simple_run: OptimisationRun) -> None:
+        """Test that training_iter is stored."""
+        assert simple_run._training_iter == 20
+
+    def test_repr_shows_training_mode(self, simple_run: OptimisationRun) -> None:
+        """Test that __repr__ shows fit=training."""
+        assert "fit=training" in repr(simple_run)
