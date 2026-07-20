@@ -14,9 +14,7 @@ Quick example
 
 .. code-block:: python
 
-   from actgpr.objective_fn import ObjectiveFn
-   from actgpr.run import OptimisationRun
-   from actgpr.surrogate import GPyTorchSurrogate
+   from actgpr import ObjectiveFn, OptimisationRun, GPyTorchSurrogate
 
    run = OptimisationRun.with_training(
        objective=ObjectiveFn(lambda x: (x - 1) ** 2),
