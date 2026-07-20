@@ -28,8 +28,8 @@ class OptimisationRun:
     to iteratively find the minimum of the ObjectiveFn within the search bounds.
 
     The loop terminates when either the maximum EI score falls below
-    ei_threshold (nothing left to gain) or the total number of evaluations
-    reaches max_evaluations (budget cap) — whichever fires first.
+    ei_threshold (nothing left to gain) or the number of optimisation
+    iterations reaches max_evaluations (budget cap) — whichever fires first.
 
     Use the classmethods ``with_training`` and ``without_training`` to
     construct an OptimisationRun. The raw ``__init__`` is available for
@@ -86,7 +86,8 @@ class OptimisationRun:
             (e.g. [1, 2]) don't silently truncate later fractional points
             appended during the optimisation loop.
         max_evaluations : int
-            Maximum total number of objective evaluations (budget cap).
+            Maximum number of active optimisation iterations — GPR fit
+            cycles — to execute (budget cap).
         ei_threshold : float
             The loop stops when the maximum EI score falls below this value.
         n_candidates : int, optional
@@ -101,8 +102,9 @@ class OptimisationRun:
         Raises
         ------
         ValueError
-            If initial_train_x is empty or max_evaluations is less than the
-            number of initial points.
+            If initial_train_x is empty, max_evaluations is not positive,
+            search_bounds is not an increasing interval, or ei_threshold
+            is not positive.
         """
         # Cast to float64 regardless of input dtype (list or tensor, int or
         # float) so later torch.cat calls never truncate fractional points.
@@ -114,10 +116,13 @@ class OptimisationRun:
             raise ValueError(
                 f"max_evaluations ({max_evaluations}) must be a positive integer."
             )
-        assert (
-            search_bounds[0] < search_bounds[1]
-        ), f"search_bounds lo ({search_bounds[0]}) must be < hi ({search_bounds[1]})"
-        assert ei_threshold > 0, f"ei_threshold must be positive, got {ei_threshold}"
+        if not search_bounds[0] < search_bounds[1]:
+            raise ValueError(
+                f"search_bounds lo ({search_bounds[0]}) must be < "
+                f"hi ({search_bounds[1]})"
+            )
+        if ei_threshold <= 0:
+            raise ValueError(f"ei_threshold must be positive, got {ei_threshold}")
 
         self.objective = objective
         self.surrogate = surrogate
@@ -180,7 +185,8 @@ class OptimisationRun:
         initial_train_x : torch.Tensor or list[float] of shape (n,)
             The initial input points to seed the optimisation loop.
         max_evaluations : int
-            Maximum total number of objective evaluations (budget cap).
+            Maximum number of active optimisation iterations — GPR fit
+            cycles — to execute (budget cap).
         ei_threshold : float
             The loop stops when the maximum EI score falls below this value.
         n_candidates : int, optional
@@ -246,7 +252,8 @@ class OptimisationRun:
         initial_train_x : torch.Tensor or list[float] of shape (n,)
             The initial input points to seed the optimisation loop.
         max_evaluations : int
-            Maximum total number of objective evaluations (budget cap).
+            Maximum number of active optimisation iterations — GPR fit
+            cycles — to execute (budget cap).
         ei_threshold : float
             The loop stops when the maximum EI score falls below this value.
         n_candidates : int, optional
@@ -321,8 +328,6 @@ class OptimisationRun:
             "store_snapshots": self.store_snapshots,
         }
 
-    # TODO: max_evaluations validation may need revisiting — should it allow
-    #       fewer evaluations than initial points?
     def run(self) -> dict[str, object]:
         """Execute the optimisation loop.
 
@@ -341,9 +346,6 @@ class OptimisationRun:
             - "stop_reason": str — "ei_threshold" if EI dropped below
               ei_threshold, "max_evaluations" if budget cap was reached.
         """
-        stop_reason = "max_evaluations"
-        n_iterations = 0
-
         # ── MRR: setup (only if run_dir provided) ──
         logger = logging.getLogger("actgpr")
         file_handler = None
@@ -372,15 +374,67 @@ class OptimisationRun:
 
         run_start = datetime.now(timezone.utc)
 
-        fit_mode = "training" if self._train_hyperparameters else "fixed"
-        logger.info(
-            f"Starting optimisation ({fit_mode}): "
-            f"{self.train_x.numel()} initial points, "
-            f"max_evaluations={self.max_evaluations}, "
-            f"ei_threshold={self.ei_threshold}"
-        )
+        try:
+            fit_mode = "training" if self._train_hyperparameters else "fixed"
+            logger.info(
+                f"Starting optimisation ({fit_mode}): "
+                f"{self.train_x.numel()} initial points, "
+                f"max_evaluations={self.max_evaluations}, "
+                f"ei_threshold={self.ei_threshold}"
+            )
 
-        previous_best = self.train_y.min().item()
+            stop_reason, n_iterations = self._run_loop(logger)
+
+            best_idx = torch.argmin(self.train_y)
+            best_x = self.train_x[best_idx].item()
+            best_y = self.train_y[best_idx].item()
+
+            run_end = datetime.now(timezone.utc)
+
+            # ── MRR: finalize (only if run_dir provided) ──
+            if actual_run_dir is not None:
+                mrr.save_hdf5(
+                    actual_run_dir,
+                    results=self._results,
+                    config=self._config_dict(),
+                    store_snapshots=self.store_snapshots,
+                    final_train_x=self.train_x,
+                    final_train_y=self.train_y,
+                    best_x=best_x,
+                    best_y=best_y,
+                    stop_reason=stop_reason,
+                    n_iterations=n_iterations,
+                )
+                mrr.write_meta(
+                    actual_run_dir,
+                    run_start=run_start,
+                    run_end=run_end,
+                    best_x=best_x,
+                    best_y=best_y,
+                    n_iterations=n_iterations,
+                    stop_reason=stop_reason,
+                )
+
+            return {
+                "best_x": best_x,
+                "best_y": best_y,
+                "train_x": self.train_x,
+                "train_y": self.train_y,
+                "n_iterations": n_iterations,
+                "stop_reason": stop_reason,
+            }
+        finally:
+            # Detach the run.log handler even if the loop raises — a leaked
+            # handler would duplicate every log line in a later run() and
+            # keep the log file open.
+            if file_handler is not None:
+                logger.removeHandler(file_handler)
+                file_handler.close()
+
+    def _run_loop(self, logger: logging.Logger) -> tuple[str, int]:
+        """Execute the optimisation loop and return (stop_reason, n_iterations)."""
+        stop_reason = "max_evaluations"
+        n_iterations = 0
 
         while n_iterations < self.max_evaluations:
             n_iterations += 1
@@ -408,11 +462,12 @@ class OptimisationRun:
             new_y = self.objective.evaluate(next_point)[0]
 
             # 5. Validation metrics
+            # improvement Δᵢ = y_best before this iteration − y_best after it;
+            # zero when the new point does not improve on current_best.
             best_idx = torch.argmax(self._acq.ei_scores)
             predicted_y = self._acq.f_mean[best_idx].item()
             prediction_error = predicted_y - new_y
-            improvement = previous_best - current_best
-            previous_best = current_best
+            improvement = max(0.0, current_best - new_y)
 
             logger.info(
                 f"Iteration {n_iterations} | "
@@ -450,7 +505,7 @@ class OptimisationRun:
 
             self._results.append(iteration_data)
 
-            # 6. Append to training data (after snapshot)
+            # 7. Append to training data (after snapshot)
             self.train_x = torch.cat(
                 [self.train_x, torch.tensor([next_point], dtype=self.train_x.dtype)]
             )
@@ -464,46 +519,7 @@ class OptimisationRun:
                 f"(reached max_evaluations={self.max_evaluations})"
             )
 
-        best_idx = torch.argmin(self.train_y)
-        best_x = self.train_x[best_idx].item()
-        best_y = self.train_y[best_idx].item()
-
-        run_end = datetime.now(timezone.utc)
-
-        # ── MRR: finalize (only if run_dir provided) ──
-        if self._run_dir is not None and actual_run_dir is not None:
-            mrr.save_hdf5(
-                actual_run_dir,
-                results=self._results,
-                config=self._config_dict(),
-                store_snapshots=self.store_snapshots,
-                final_train_x=self.train_x,
-                final_train_y=self.train_y,
-                best_x=best_x,
-                best_y=best_y,
-                stop_reason=stop_reason,
-                n_iterations=n_iterations,
-            )
-            mrr.write_meta(
-                actual_run_dir,
-                run_start=run_start,
-                run_end=run_end,
-                best_x=best_x,
-                best_y=best_y,
-                n_iterations=n_iterations,
-                stop_reason=stop_reason,
-            )
-            if file_handler is not None:
-                logger.removeHandler(file_handler)
-
-        return {
-            "best_x": best_x,
-            "best_y": best_y,
-            "train_x": self.train_x,
-            "train_y": self.train_y,
-            "n_iterations": n_iterations,
-            "stop_reason": stop_reason,
-        }
+        return stop_reason, n_iterations
 
     def plot_iterations(self) -> None:
         """Open an interactive matplotlib figure to browse iterations.

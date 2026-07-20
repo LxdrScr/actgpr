@@ -1,5 +1,8 @@
 """Unit tests for the OptimisationRun class."""
 
+import logging
+from pathlib import Path
+
 import pytest
 import torch
 
@@ -93,6 +96,30 @@ class TestOptimisationRunInit:
                 initial_train_x=torch.tensor([-1.0, 0.0, 1.0]),
                 max_evaluations=0,
                 ei_threshold=0.01,
+            )
+
+    def test_raises_on_inverted_search_bounds(self) -> None:
+        """Test that ValueError is raised when search_bounds are not increasing."""
+        with pytest.raises(ValueError, match="must be <"):
+            OptimisationRun(
+                objective=ObjectiveFn(),
+                surrogate=GPyTorchSurrogate(),
+                search_bounds=(3.0, -3.0),
+                initial_train_x=torch.tensor([-1.0, 0.0, 1.0]),
+                max_evaluations=10,
+                ei_threshold=0.01,
+            )
+
+    def test_raises_on_non_positive_ei_threshold(self) -> None:
+        """Test that ValueError is raised when ei_threshold <= 0."""
+        with pytest.raises(ValueError, match="ei_threshold must be positive"):
+            OptimisationRun(
+                objective=ObjectiveFn(),
+                surrogate=GPyTorchSurrogate(),
+                search_bounds=(-3.0, 3.0),
+                initial_train_x=torch.tensor([-1.0, 0.0, 1.0]),
+                max_evaluations=10,
+                ei_threshold=0.0,
             )
 
     def test_results_accumulator_starts_empty(
@@ -202,6 +229,52 @@ class TestOptimisationRunRun:
             assert "new_y" in entry
             assert "current_best" in entry
             assert "max_ei" in entry
+
+    def test_improvement_reflects_current_iteration(
+        self, simple_run: OptimisationRun
+    ) -> None:
+        """Test that improvement is the gain from this iteration's own new_y."""
+        simple_run.run()
+        for entry in simple_run._results:
+            expected = max(0.0, entry["current_best"] - entry["new_y"])
+            assert entry["improvement"] == pytest.approx(expected)
+
+    def test_file_logger_detached_after_crash(self, tmp_path: Path) -> None:
+        """Test that the run.log handler is removed when the loop raises."""
+        calls = {"count": 0}
+
+        def flaky(x: float) -> float:
+            """Evaluate x² for the initial points, then fail inside the loop."""
+            calls["count"] += 1
+            if calls["count"] > 2:
+                raise RuntimeError("objective backend failure")
+            return x**2
+
+        run = OptimisationRun.without_training(
+            objective=ObjectiveFn(flaky),
+            surrogate=GPyTorchSurrogate(),
+            search_bounds=(-3.0, 3.0),
+            initial_train_x=[-2.0, 2.0],
+            max_evaluations=5,
+            ei_threshold=1e-12,
+            n_candidates=50,
+            run_dir=tmp_path,
+        )
+
+        logger = logging.getLogger("actgpr")
+        n_handlers_before = len(logger.handlers)
+
+        # ObjectiveFn wraps errors from the user function as TypeError
+        with pytest.raises(TypeError, match="objective backend failure"):
+            run.run()
+
+        assert len(logger.handlers) == n_handlers_before
+
+        # config.json and manifest.json still exist as the crash trace
+        (run_dir,) = list(tmp_path.iterdir())
+        assert (run_dir / "config.json").exists()
+        assert (run_dir / "manifest.json").exists()
+        assert (run_dir / "run.log").exists()
 
     def test_custom_objective_converges(self) -> None:
         """Test that the loop works with a custom objective function."""
