@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 import h5py
+import numpy as np
 import torch
 
 
@@ -157,33 +158,60 @@ def save_hdf5(
     stop_reason: str,
     n_iterations: int,
 ) -> None:
-    """Write self-describing HDF5 with iteration data and final results."""
+    """Write a self-describing HDF5 file with the run history and results.
+
+    Layout
+    ------
+    ``/`` (root)
+        Attributes holding the run configuration (bounds, thresholds, ...).
+    ``history/``
+        Per-iteration scalar series, each a dataset of length ``n_iterations``
+        aligned by the ``iteration`` index dataset: ``next_point``, ``new_y``,
+        ``current_best``, ``max_ei``, ``prediction_error``, ``improvement``.
+        This is the single authoritative record of the run's scalar history.
+    ``iterations/iter_NNN/``
+        Written only when ``store_snapshots`` is True: the GP snapshot arrays
+        ``candidates``, ``f_mean``, ``f_var``, ``ei_scores``, ``train_x``,
+        ``train_y`` for that iteration.
+    ``final/``
+        Attributes ``best_x``, ``best_y``, ``stop_reason``, ``n_iterations``
+        and the final ``train_x``/``train_y`` datasets.
+    """
     h5_path = run_dir / "results.h5"
     with h5py.File(h5_path, "w") as f:
-        # Root attributes (config)
+        # Root attributes: the run configuration.
         for key, value in config.items():
             if value is not None:
-                if isinstance(value, list):
-                    f.attrs[key] = value
-                else:
-                    f.attrs[key] = value
+                f.attrs[key] = value
 
-        # Iterations group
-        iter_group = f.create_group("iterations")
-        for res in results:
-            i = res["iteration"]
-            grp = iter_group.create_group(f"iter_{i:03d}")
+        # History: per-iteration scalar series sharing one iteration index.
+        # Single authoritative record of the run's scalar history.
+        history = f.create_group("history")
+        history.attrs["description"] = (
+            "Per-iteration scalar series; align by the 'iteration' dataset."
+        )
+        history.create_dataset(
+            "iteration",
+            data=np.array([res["iteration"] for res in results], dtype=np.int64),
+        )
+        for field in (
+            "next_point",
+            "new_y",
+            "current_best",
+            "max_ei",
+            "prediction_error",
+            "improvement",
+        ):
+            history.create_dataset(
+                field,
+                data=np.array([res[field] for res in results], dtype=np.float64),
+            )
 
-            # Scalar attributes
-            grp.attrs["next_point"] = float(res["next_point"])
-            grp.attrs["new_y"] = float(res["new_y"])
-            grp.attrs["current_best"] = float(res["current_best"])
-            grp.attrs["max_ei"] = float(res["max_ei"])
-            grp.attrs["prediction_error"] = float(res["prediction_error"])
-            grp.attrs["improvement"] = float(res["improvement"])
-
-            # Tensor datasets (only if stored)
-            if store_snapshots:
+        # Snapshot arrays, only when captured — one group per iteration.
+        if store_snapshots:
+            iter_group = f.create_group("iterations")
+            for res in results:
+                grp = iter_group.create_group(f"iter_{res['iteration']:03d}")
                 grp.create_dataset("candidates", data=res["candidates"].numpy())
                 grp.create_dataset("f_mean", data=res["f_mean"].numpy())
                 grp.create_dataset("f_var", data=res["f_var"].numpy())
@@ -191,13 +219,12 @@ def save_hdf5(
                 grp.create_dataset("train_x", data=res["train_x"].numpy())
                 grp.create_dataset("train_y", data=res["train_y"].numpy())
 
-        # Final group
+        # Final: run summary and final state.
         final_group = f.create_group("final")
         final_group.attrs["best_x"] = float(best_x)
         final_group.attrs["best_y"] = float(best_y)
         final_group.attrs["stop_reason"] = stop_reason
         final_group.attrs["n_iterations"] = n_iterations
-
         final_group.create_dataset("train_x", data=final_train_x.numpy())
         final_group.create_dataset("train_y", data=final_train_y.numpy())
 
