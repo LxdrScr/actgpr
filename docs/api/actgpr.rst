@@ -59,3 +59,4 @@ Module contents
    :members:
    :show-inheritance:
    :undoc-members:
+   :noindex:
