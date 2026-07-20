@@ -180,14 +180,48 @@ class TestSaveHdf5:
             assert f.attrs["noise"] == 1e-4
             assert f.attrs["fit_mode"] == "training"
 
-            assert "iterations" in f
-            assert "iter_001" in f["iterations"]
-            assert f["iterations/iter_001"].attrs["next_point"] == 0.5
-
             assert "final" in f
             assert f["final"].attrs["best_x"] == 0.5
             assert "train_x" in f["final"]
             assert len(f["final/train_x"]) == 2
+
+    def test_history_group_has_scalar_series(self, tmp_path: Path, dummy_data):
+        config, results = dummy_data
+        mrr.save_hdf5(
+            tmp_path,
+            results=results,
+            config=config,
+            store_snapshots=False,
+            final_train_x=torch.tensor([0.0, 0.5]),
+            final_train_y=torch.tensor([1.0, 0.2]),
+            best_x=0.5,
+            best_y=0.2,
+            stop_reason="max_evaluations",
+            n_iterations=1,
+        )
+
+        with h5py.File(tmp_path / "results.h5", "r") as f:
+            # Per-iteration scalars live once, as aligned datasets under history.
+            history = f["history"]
+            for field in (
+                "iteration",
+                "next_point",
+                "new_y",
+                "current_best",
+                "max_ei",
+                "prediction_error",
+                "improvement",
+            ):
+                assert field in history, f"missing history dataset: {field}"
+                assert len(history[field]) == len(results)
+
+            assert history["iteration"][0] == 1
+            assert history["next_point"][0] == 0.5
+            assert history["prediction_error"][0] == 0.05
+            assert history["improvement"][0] == 0.0
+
+            # Scalars are no longer duplicated as iter_NNN attributes.
+            assert "iterations" not in f
 
     def test_tensor_datasets_only_with_snapshots(self, tmp_path: Path, dummy_data):
         config, results = dummy_data
