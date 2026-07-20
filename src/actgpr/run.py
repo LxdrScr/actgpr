@@ -110,10 +110,9 @@ class OptimisationRun:
 
         if self.train_x.numel() == 0:
             raise ValueError("initial_train_x must contain at least one point.")
-        if max_evaluations <= self.train_x.numel():
+        if max_evaluations <= 0:
             raise ValueError(
-                f"max_evaluations ({max_evaluations}) must be greater than the "
-                f"number of initial points ({self.train_x.numel()})."
+                f"max_evaluations ({max_evaluations}) must be a positive integer."
             )
         assert (
             search_bounds[0] < search_bounds[1]
@@ -383,7 +382,7 @@ class OptimisationRun:
 
         previous_best = self.train_y.min().item()
 
-        while self.train_x.numel() < self.max_evaluations:
+        while n_iterations < self.max_evaluations:
             n_iterations += 1
 
             # 1. Fit surrogate to all current training data

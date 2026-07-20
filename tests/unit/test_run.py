@@ -84,14 +84,14 @@ class TestOptimisationRunInit:
             )
 
     def test_raises_on_max_eval_too_small(self) -> None:
-        """Test that ValueError is raised when max_evaluations <= n initial points."""
-        with pytest.raises(ValueError, match="must be greater"):
+        """Test that ValueError is raised when max_evaluations <= 0."""
+        with pytest.raises(ValueError, match="must be a positive integer"):
             OptimisationRun(
                 objective=ObjectiveFn(),
                 surrogate=GPyTorchSurrogate(),
                 search_bounds=(-3.0, 3.0),
                 initial_train_x=torch.tensor([-1.0, 0.0, 1.0]),
-                max_evaluations=3,
+                max_evaluations=0,
                 ei_threshold=0.01,
             )
 
@@ -174,7 +174,7 @@ class TestOptimisationRunRun:
             training_iter=10,
         )
         result = run.run()
-        assert result["train_x"].numel() <= 5
+        assert result["n_iterations"] == 5
         assert result["stop_reason"] == "max_evaluations"
 
     def test_stop_reason_ei_threshold(self) -> None:
