@@ -238,8 +238,10 @@ class GPyTorchSurrogate:
         self.model.eval()
         self.likelihood.eval()
 
-        with torch.no_grad(), gpytorch.settings.fast_pred_var(), gpytorch.settings.cholesky_jitter(
-            CHOLESKY_JITTER
+        with (
+            torch.no_grad(),
+            gpytorch.settings.fast_pred_var(),
+            gpytorch.settings.cholesky_jitter(CHOLESKY_JITTER),
         ):
             f_preds = self.model(test_x_double)
             observed_pred = self.likelihood(f_preds)
