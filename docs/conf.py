@@ -5,8 +5,8 @@ from importlib.metadata import version as get_version
 # -- Project information -----------------------------------------------------
 
 project = "actgpr"
-author = "Alexander Schroder"
-copyright = "2026, Alexander Schroder"
+author = "Alexander Schröder"
+copyright = "2026, Alexander Schröder"
 release = get_version("actgpr")
 version = ".".join(release.split(".")[:2])
 
