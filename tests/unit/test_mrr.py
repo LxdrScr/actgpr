@@ -261,15 +261,19 @@ class TestSetupFileLogger:
     def test_creates_run_log_file(self, tmp_path: Path):
         import logging
 
-        handler = mrr.setup_file_logger(tmp_path)
-
-        log_path = tmp_path / "run.log"
-        assert log_path.exists()
-
         logger = logging.getLogger("actgpr")
-        logger.info("Test message")
+        handler = mrr.setup_file_logger(tmp_path)
+        try:
+            log_path = tmp_path / "run.log"
+            assert log_path.exists()
 
-        content = log_path.read_text()
-        assert "Test message" in content
+            logger.info("Test message")
+
+            content = log_path.read_text()
+            assert "Test message" in content
+        finally:
+            # Detach and close so the handler does not leak into other tests
+            logger.removeHandler(handler)
+            handler.close()
 
         logger.removeHandler(handler)
