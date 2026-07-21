@@ -79,7 +79,7 @@ You also choose a **fit mode**:
        objective=objective,
        surrogate=GPyTorchSurrogate(),
        search_bounds=(-3.0, 5.0),   # interval in which the minimum is searched
-       initial_train_x=[-2.0, 4.0],  # seed points to fit the first surrogate
+       initial_train_x=[-3.0, 5.0],  # points where we start looking for the minimum
        max_evaluations=20,
        ei_threshold=0.001,
        store_snapshots=True,         # keep per-iteration state for plotting

@@ -19,6 +19,7 @@ dependencies = [
 Repository = "https://github.com/LxdrScr/actgpr"
 
 [tool.poetry]
+requires-poetry = ">=2.0"
 packages = [{include = "actgpr", from = "src"}]
 
 [build-system]
