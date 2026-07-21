@@ -539,11 +539,17 @@ class OptimisationRun:
                 "No snapshots available. Set store_snapshots=True before calling run()."
             )
 
+        # Fixed EI y-axis range shared across all iterations — otherwise each
+        # redraw autoscales to its own EI scores, hiding the shrinking max EI
+        # that signals convergence. 5% headroom keeps the peak off the frame.
+        max_ei_overall = max(r["ei_scores"].max().item() for r in snapshots)
+        ei_ylim = (0.0, max_ei_overall * 1.05)
+
         fig, (gp_ax, ei_ax) = plt.subplots(2, 1, figsize=(10, 8))
         plt.subplots_adjust(bottom=0.18, hspace=0.35)
 
         # Draw initial state
-        plot_iteration_snapshot(snapshots[0], (gp_ax, ei_ax))
+        plot_iteration_snapshot(snapshots[0], (gp_ax, ei_ax), ei_ylim=ei_ylim)
 
         # Slider axis sits below both subplots
         slider_ax = fig.add_axes([0.15, 0.04, 0.7, 0.04])
@@ -561,7 +567,7 @@ class OptimisationRun:
             idx = int(val) - 1
             gp_ax.cla()
             ei_ax.cla()
-            plot_iteration_snapshot(snapshots[idx], (gp_ax, ei_ax))
+            plot_iteration_snapshot(snapshots[idx], (gp_ax, ei_ax), ei_ylim=ei_ylim)
             fig.canvas.draw_idle()
 
         slider.on_changed(_update)
