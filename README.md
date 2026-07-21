@@ -73,7 +73,7 @@ Expected output: `best_x` close to `1.0` and `best_y` close to `0.0` (the minimu
 
 **Fit modes** — the two constructors select how GP hyperparameters are handled:
 
-- `OptimisationRun.with_training(...)` — lengthscale, outputscale, and noise are optimised each iteration (Adam on the marginal log likelihood, `training_iter` steps). Use this when you do not know good hyperparameters — the usual case.
+- `OptimisationRun.with_training(...)` — lengthscale, outputscale, and noise are re-tuned at every iteration using [Adam](https://arxiv.org/abs/1412.6980) (`torch.optim.Adam`), a gradient-descent variant with momentum and per-parameter step sizes: over `training_iter` steps it adjusts the hyperparameters to maximise the marginal log likelihood — how plausible the observed training data is under a GP with those hyperparameters. Adam only fits the surrogate; it never evaluates the blackbox. Use this mode when you do not know good hyperparameters — the usual case.
 - `OptimisationRun.without_training(...)` — hyperparameters stay fixed at exactly the values you pass; nothing is tuned. Use this for controlled comparisons or when good values are already known:
 
 ```python
