@@ -26,8 +26,8 @@ interval via ``search_bounds``, and hand both to an ``OptimisationRun``:
        objective=ObjectiveFn(my_blackbox),
        surrogate=GPyTorchSurrogate(),
        search_bounds=(-3.0, 5.0),   # interval in which the minimum is searched
-       initial_train_x=[-2.0, 4.0],
-       max_evaluations=20,
+       initial_train_x=[-3.0, 5.0],
+       max_iterations=20,
        ei_threshold=0.001,
        run_dir="results",
    )
