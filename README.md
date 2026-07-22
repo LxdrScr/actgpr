@@ -4,6 +4,8 @@
 
 The Gaussian Process surrogate is built on [GPyTorch](https://gpytorch.ai/); the Expected Improvement acquisition function follows [Jones, Schonlau & Welch (1998), *Efficient Global Optimization of Expensive Black-Box Functions*](https://doi.org/10.1023/A:1008306431147).
 
+**Documentation:** [lxdrscr.github.io/actgpr](https://lxdrscr.github.io/actgpr/) — full API reference and a step-by-step tutorial, built from this repository's docstrings and reST sources with Sphinx.
+
 ## How it works
 
 1. Evaluate the Objective at the initial input points.
@@ -208,6 +210,8 @@ poetry run sphinx-build -W docs docs/build/html   # API docs (warnings = errors)
 ```
 
 The regression tier compares a fixed-seed run against `tests/regression/data/quadratic_baseline.csv`; the test module documents how to regenerate the baseline after an intentional behaviour change.
+
+Pushing to `main` rebuilds and republishes the docs above via GitHub Pages (see `.github/workflows/ci.yml`), so the local `sphinx-build` command is for previewing changes before they merge.
 
 ## License
 

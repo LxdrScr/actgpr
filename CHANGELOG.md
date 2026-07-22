@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sphinx API docs and tutorial are now published to GitHub Pages
+  ([lxdrscr.github.io/actgpr](https://lxdrscr.github.io/actgpr/)) via a
+  `deploy-docs` CI stage that runs after `docs` passes on `main`
+
 ### Changed
 
 - Renamed `max_evaluations` to `max_iterations` everywhere: the constructor
