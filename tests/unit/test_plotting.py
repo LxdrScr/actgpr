@@ -84,6 +84,73 @@ class TestPlotAcquisition:
 
         assert first_ylim == second_ylim == shared_ylim
 
+    def test_log_scale_sets_axis_scale(self) -> None:
+        """Test that log_scale=True switches the y-axis to a log scale."""
+        candidates = torch.linspace(-1.0, 1.0, 10)
+        ei_scores = torch.linspace(0.0, 0.1, 10)
+
+        _, ax = plot_acquisition(candidates, ei_scores, show=False, log_scale=True)
+
+        assert ax.get_yscale() == "log"
+
+    def test_log_scale_clamps_zero_scores(self) -> None:
+        """Test that exact-zero EI scores are clamped to a positive floor.
+
+        A log axis cannot represent zero; EI is exactly 0 at training
+        points, so plotting must clamp rather than error or silently drop
+        those points.
+        """
+        candidates = torch.linspace(-1.0, 1.0, 5)
+        ei_scores = torch.tensor([0.0, 0.1, 0.0, 0.2, 0.0])
+
+        _, ax = plot_acquisition(
+            candidates, ei_scores, show=False, log_scale=True, ei_threshold=0.01
+        )
+
+        ei_line = next(
+            line
+            for line in ax.get_lines()
+            if line.get_label() == "Expected Improvement"
+        )
+        plotted = ei_line.get_ydata()
+        assert all(
+            v > 0 for v in plotted
+        ), "log scale must never receive zero/negative values"
+
+    def test_log_scale_floor_defaults_below_ei_threshold(self) -> None:
+        """Test that the default log floor sits one order of magnitude below ei_threshold."""
+        candidates = torch.linspace(-1.0, 1.0, 5)
+        ei_scores = torch.linspace(0.0, 0.05, 5)
+
+        _, ax = plot_acquisition(
+            candidates, ei_scores, show=False, log_scale=True, ei_threshold=0.01
+        )
+
+        lo, _ = ax.get_ylim()
+        assert lo == pytest.approx(0.001)
+
+    def test_ei_threshold_drawn_as_reference_line(self) -> None:
+        """Test that ei_threshold is drawn as a horizontal reference line."""
+        candidates = torch.linspace(-1.0, 1.0, 5)
+        ei_scores = torch.linspace(0.0, 0.05, 5)
+
+        _, ax = plot_acquisition(
+            candidates, ei_scores, show=False, log_scale=True, ei_threshold=0.01
+        )
+
+        labels = [line.get_label() for line in ax.get_lines()]
+        assert any("ei_threshold" in label for label in labels)
+
+    def test_no_reference_line_without_ei_threshold(self) -> None:
+        """Test that no threshold line is drawn when ei_threshold is not given."""
+        candidates = torch.linspace(-1.0, 1.0, 5)
+        ei_scores = torch.linspace(0.0, 0.05, 5)
+
+        _, ax = plot_acquisition(candidates, ei_scores, show=False)
+
+        labels = [line.get_label() for line in ax.get_lines()]
+        assert not any("ei_threshold" in label for label in labels)
+
 
 class TestPlotIterationSnapshot:
     """Tests for plot_iteration_snapshot's ei_ylim passthrough."""
