@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `plot_acquisition()` now marks the highest EI score at `next_point` with
+  a labelled point, so the chosen point's EI value is visible directly on
+  the graph rather than only in the subplot title
+- `plot_acquisition()`, `plot_iteration_snapshot()`, and
+  `OptimisationRun.plot_iterations(log_scale=True)` can now render the EI
+  y-axis on a log scale, with `ei_threshold` drawn as a reference line one
+  order of magnitude above the axis floor — makes the EI shrinkage across
+  a converging run visible instead of compressed into an invisible flat
+  line on a linear axis
 - Sphinx API docs and tutorial are now published to GitHub Pages
   ([alxndrschroeder.github.io/actgpr](https://alxndrschroeder.github.io/actgpr/)) via a
   `deploy-docs` CI stage that runs after `docs` passes on `main`

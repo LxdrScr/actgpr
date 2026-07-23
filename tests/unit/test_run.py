@@ -380,6 +380,26 @@ class TestOptimisationRunSnapshots:
         expected_max = max(r["ei_scores"].max().item() for r in snapshot_run._results)
         assert ei_ax.get_ylim() == (0.0, pytest.approx(expected_max * 1.05))
 
+    def test_plot_iterations_log_scale(
+        self, snapshot_run: OptimisationRun, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that log_scale=True sets a log axis with an ei_threshold-based floor."""
+        import matplotlib.pyplot as plt
+
+        monkeypatch.setattr(plt, "show", lambda: None)
+
+        snapshot_run.run()
+        snapshot_run.plot_iterations(log_scale=True)
+
+        _, ei_ax = plt.gcf().axes[:2]
+        assert ei_ax.get_yscale() == "log"
+
+        lo, _ = ei_ax.get_ylim()
+        assert lo == pytest.approx(snapshot_run.ei_threshold * 0.1)
+
+        labels = [line.get_label() for line in ei_ax.get_lines()]
+        assert any("ei_threshold" in label for label in labels)
+
     def test_slider_kept_alive_and_responsive(
         self, snapshot_run: OptimisationRun, monkeypatch: pytest.MonkeyPatch
     ) -> None:

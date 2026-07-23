@@ -119,6 +119,15 @@ An interactive matplotlib window opens with the GP prediction (mean, 95 %
 confidence band, training data) on top, the EI landscape below, and a
 slider to scrub through iterations.
 
+EI typically shrinks by orders of magnitude as a run converges — on a
+linear axis, later iterations can look like a flat line at zero with no
+visible structure. Pass ``log_scale=True`` to keep that shrinkage visible,
+with ``ei_threshold`` drawn as a reference line:
+
+.. code-block:: python
+
+   run.plot_iterations(log_scale=True)
+
 Step 5 — the reproducibility record (MRR)
 -----------------------------------------
 
