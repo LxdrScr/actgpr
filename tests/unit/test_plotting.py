@@ -151,6 +151,35 @@ class TestPlotAcquisition:
         labels = [line.get_label() for line in ax.get_lines()]
         assert not any("ei_threshold" in label for label in labels)
 
+    def test_marks_max_ei_value_at_next_point(self) -> None:
+        """Test that the highest EI score is marked at next_point with its value."""
+        candidates = torch.linspace(-1.0, 1.0, 5)
+        ei_scores = torch.tensor([0.0, 0.01, 0.05, 0.02, 0.0])
+        next_point = candidates[2].item()  # matches argmax(ei_scores)
+
+        _, ax = plot_acquisition(
+            candidates, ei_scores, next_point=next_point, show=False
+        )
+
+        labels = [line.get_label() for line in ax.get_lines()]
+        assert any("Max EI" in label and "5.00e-02" in label for label in labels)
+
+        marker = next(
+            line for line in ax.get_lines() if line.get_label().startswith("Max EI")
+        )
+        assert marker.get_xdata()[0] == pytest.approx(next_point)
+        assert marker.get_ydata()[0] == pytest.approx(0.05)
+
+    def test_no_max_ei_marker_without_next_point(self) -> None:
+        """Test that no peak marker is drawn when next_point is not given."""
+        candidates = torch.linspace(-1.0, 1.0, 5)
+        ei_scores = torch.linspace(0.0, 0.05, 5)
+
+        _, ax = plot_acquisition(candidates, ei_scores, show=False)
+
+        labels = [line.get_label() for line in ax.get_lines()]
+        assert not any("Max EI" in label for label in labels)
+
 
 class TestPlotIterationSnapshot:
     """Tests for plot_iteration_snapshot's ei_ylim passthrough."""
