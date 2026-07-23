@@ -95,6 +95,8 @@ result = run.run()
 
 Set `store_snapshots=True` to browse the GP and EI state of every iteration afterwards with `run.plot_iterations()` (interactive slider). The `prediction_error`/`improvement` history used by `plot_run_history()` is recorded either way, regardless of this flag.
 
+EI often shrinks by orders of magnitude as a run converges — enough to look like a flat line at zero on a linear axis. Pass `log_scale=True` to `plot_iterations()` to keep that shrinkage visible; `ei_threshold` is drawn as a reference line so you can see the EI curve cross into converged territory.
+
 ## Run outputs (MRR)
 
 When `run_dir` is given, each run creates a timestamped **run directory** (named from timestamp + key parameters) containing the five **MRR artifacts**:
