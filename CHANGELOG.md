@@ -41,6 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README quickstart and new docs tutorial reframed around wrapping a
   blackbox function in an `ObjectiveFn`
 
+### Fixed
+
+- The GP/EI fit that triggers `ei_threshold` convergence was computed but
+  never recorded: `plot_iterations()`'s slider silently stopped one frame
+  short, showing the second-to-last state (still above `ei_threshold`) as
+  if the run had stopped prematurely. The converging fit's state is now
+  captured in `OptimisationRun._convergence_snapshot`, shown as the
+  slider's final frame (titled "converged — not evaluated", since its
+  candidate was scored but never evaluated), and written to `results.h5`
+  under `final/converged_*` when `store_snapshots=True`
+
 ## [0.1.0] - 2026-07-20
 
 ### Added
