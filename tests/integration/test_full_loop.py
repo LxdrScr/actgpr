@@ -18,7 +18,7 @@ from actgpr.objective_fn import ObjectiveFn
 from actgpr.run import OptimisationRun
 from actgpr.surrogate import GPyTorchSurrogate
 
-SEED = 42
+SEED = 25
 
 MRR_ARTIFACTS = ("config.json", "manifest.json", "meta.json", "run.log", "results.h5")
 

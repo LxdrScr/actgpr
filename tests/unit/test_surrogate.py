@@ -6,7 +6,7 @@ import torch
 
 from actgpr.surrogate import ExactGPModel, GPyTorchSurrogate
 
-SEED = 42
+SEED = 25
 
 
 # ---------------------------------------------------------------------------

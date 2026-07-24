@@ -10,7 +10,7 @@ from actgpr.objective_fn import ObjectiveFn
 from actgpr.run import OptimisationRun
 from actgpr.surrogate import GPyTorchSurrogate
 
-SEED = 42
+SEED = 25
 
 
 @pytest.fixture()
