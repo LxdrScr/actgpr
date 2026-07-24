@@ -128,6 +128,11 @@ with ``ei_threshold`` drawn as a reference line:
 
    run.plot_iterations(log_scale=True)
 
+If the run stopped because ``max_ei`` fell below ``ei_threshold``, the
+slider's final frame is the fit that triggered that convergence — titled
+"(converged — not evaluated)" since its candidate point was scored but
+never actually evaluated, so it carries no ``pred_error``/``improvement``.
+
 Step 5 — the reproducibility record (MRR)
 -----------------------------------------
 
