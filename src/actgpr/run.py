@@ -162,6 +162,12 @@ class OptimisationRun:
         # must be an attribute, not a local variable.
         self._active_slider: Slider | None = None
 
+        # GP/EI state of the fit that triggers ei_threshold convergence, if
+        # any. That fit's next_point is scored but never evaluated, so it
+        # has no place in _results/history — this is its only record. Set
+        # in _run_loop(), only when store_snapshots is True.
+        self._convergence_snapshot: dict | None = None
+
     @classmethod
     def with_training(
         cls,
@@ -419,6 +425,7 @@ class OptimisationRun:
                     best_y=best_y,
                     stop_reason=stop_reason,
                     n_iterations=n_iterations,
+                    convergence_snapshot=self._convergence_snapshot,
                 )
                 mrr.write_meta(
                     actual_run_dir,
@@ -471,6 +478,23 @@ class OptimisationRun:
                     f"(max EI {max_ei:.6f} < ei_threshold {self.ei_threshold})"
                 )
                 stop_reason = "ei_threshold"
+                if self.store_snapshots:
+                    # This fit's next_point is never evaluated, so it has
+                    # no place among the normal per-iteration snapshots —
+                    # record it separately (see docstring of run.py's
+                    # convergence_snapshot in mrr.save_hdf5).
+                    self._convergence_snapshot = {
+                        "iteration": n_iterations,
+                        "next_point": next_point,
+                        "current_best": current_best,
+                        "max_ei": max_ei,
+                        "candidates": self._acq.candidates.clone(),
+                        "f_mean": self._acq.f_mean.clone(),
+                        "f_var": self._acq.f_var.clone(),
+                        "ei_scores": self._acq.ei_scores.clone(),
+                        "train_x": self.train_x.clone(),
+                        "train_y": self.train_y.clone(),
+                    }
                 break
 
             # 4. Evaluate objective at the next point
@@ -559,12 +583,21 @@ class OptimisationRun:
             which a linear axis compresses into an invisible flat line —
             log scale keeps that shrinkage visible. By default False.
 
+        Notes
+        -----
+        If the run converged via ei_threshold, the final frame is the fit
+        that triggered convergence — its next_point was scored but never
+        evaluated, shown with a title noting "(converged — not evaluated)"
+        instead of the usual pred_error/improvement values.
+
         Raises
         ------
         RuntimeError
             If store_snapshots was False or no snapshots were recorded.
         """
         snapshots = [r for r in self._results if "candidates" in r]
+        if self._convergence_snapshot is not None:
+            snapshots = snapshots + [self._convergence_snapshot]
         if not snapshots:
             raise RuntimeError(
                 "No snapshots available. Set store_snapshots=True before calling run()."
