@@ -6,7 +6,7 @@ import torch
 from actgpr.acquisition import Acquisition
 from actgpr.surrogate import GPyTorchSurrogate
 
-SEED = 42
+SEED = 25
 
 
 @pytest.fixture()

@@ -20,7 +20,7 @@ from actgpr.objective_fn import ObjectiveFn
 from actgpr.run import OptimisationRun
 from actgpr.surrogate import GPyTorchSurrogate
 
-SEED = 42
+SEED = 25
 BASELINE_PATH = Path(__file__).parent / "data" / "quadratic_baseline.csv"
 
 # Frozen run configuration — do not change without regenerating the baseline.
