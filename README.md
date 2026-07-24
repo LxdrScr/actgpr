@@ -119,6 +119,12 @@ When `run_dir` is given, each run creates a timestamped **run directory** (named
 │                current_best, max_ei, prediction_error, improvement)
 ├── iterations/  iter_NNN/ GP snapshot arrays (only with store_snapshots=True)
 └── final/       best_x, best_y, stop_reason, n_iterations + final train_x/train_y
+                 + converged_max_ei/converged_next_point/converged_candidates/
+                 converged_f_mean/converged_f_var/converged_ei_scores when the
+                 run stopped via ei_threshold and store_snapshots=True — the
+                 GP/EI state of the fit that triggered convergence, whose
+                 next_point was scored but never evaluated (so it has no
+                 place in history/ or iterations/)
 ```
 
 To visualise a past run, `plot_run_history(run_dir)` builds a plot of `prediction_error` and `improvement` vs. iteration straight from a run directory's `results.h5` — no `OptimisationRun` object needed, so it works on any run you (or someone else) have on disk:

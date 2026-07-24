@@ -319,8 +319,9 @@ def plot_iteration_snapshot(
     snapshot : dict
         A snapshot dictionary containing keys: ``candidates``, ``f_mean``,
         ``f_var``, ``train_x``, ``train_y``, ``ei_scores``, ``next_point``,
-        ``iteration``, ``current_best``, ``max_ei``, ``prediction_error``,
-        ``improvement``.
+        ``iteration``, ``current_best``, ``max_ei``. ``prediction_error``
+        and ``improvement`` are optional — absent for a convergence
+        snapshot, whose ``next_point`` was scored but never evaluated.
     axes : tuple[Axes, Axes]
         A pair of axes (gp_ax, ei_ax) to draw on.
     ei_ylim : tuple[float, float] or None, optional
@@ -347,12 +348,21 @@ def plot_iteration_snapshot(
         ax=gp_ax,
         show=False,
     )
-    gp_ax.set_title(
-        f"Iteration {snapshot['iteration']} | "
-        f"best: {snapshot['current_best']:.4f} | "
-        f"pred_error: {snapshot['prediction_error']:.4f} | "
-        f"improvement: {snapshot['improvement']:.4f}"
-    )
+    if "prediction_error" in snapshot:
+        gp_ax.set_title(
+            f"Iteration {snapshot['iteration']} | "
+            f"best: {snapshot['current_best']:.4f} | "
+            f"pred_error: {snapshot['prediction_error']:.4f} | "
+            f"improvement: {snapshot['improvement']:.4f}"
+        )
+    else:
+        # The fit that triggered ei_threshold convergence: next_point was
+        # scored but never evaluated, so there is no prediction_error or
+        # improvement to report for it.
+        gp_ax.set_title(
+            f"Iteration {snapshot['iteration']} (converged — not evaluated) | "
+            f"best: {snapshot['current_best']:.4f}"
+        )
 
     plot_acquisition(
         candidates=snapshot["candidates"],
